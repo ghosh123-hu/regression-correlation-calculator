@@ -9,7 +9,7 @@ st.set_page_config(
 )
 
 st.title("📊 Regression & Correlation Calculator")
-st.caption("Enter X and Y values to calculate means, correlation, regression equations and prediction.")
+st.caption("Enter X and Y values, then press Calculate to see means, correlation, regression equations and prediction.")
 
 
 # ---------- Helpers ----------
@@ -21,9 +21,14 @@ def parse_values(text):
         raise ValueError("Please enter values.")
 
     try:
-        return [float(p) for p in parts]
+        values = [float(p) for p in parts]
     except ValueError:
         raise ValueError("Use numbers only, separated by commas.")
+
+    if not all(math.isfinite(v) for v in values):
+        raise ValueError("Values must be finite numbers (no NaN or infinity).")
+
+    return values
 
 
 def fmt(value, decimals=3):
@@ -42,79 +47,88 @@ def signed_term(value, variable):
 
 
 # ---------- Input ----------
+# Everything inside st.form is sent to the app ONLY when the Calculate button
+# is pressed. Typing in the boxes does not trigger any calculation.
 with st.sidebar:
-    st.header("1. Enter Data")
-    st.write("Enter comma-separated values. X and Y must have the same number of values.")
+    with st.form("input_form"):
+        st.header("1. Enter Data")
+        st.write("Enter comma-separated values. X and Y must have the same number of values.")
 
-    x_text = st.text_input("X values", value="10, 20, 30, 40, 50")
-    y_text = st.text_input("Y values", value="15, 25, 28, 38, 45")
+        x_text = st.text_input("X values", value="10, 20, 30, 40, 50")
+        y_text = st.text_input("Y values", value="15, 25, 28, 38, 45")
 
-    st.divider()
+        st.divider()
 
-    st.header("2. Prediction")
-    prediction_x = st.number_input("X for prediction", value=35.0, step=1.0)
+        st.header("2. Prediction")
+        prediction_x = st.number_input("X for prediction", value=35.0, step=1.0)
+
+        calculate = st.form_submit_button("Calculate", type="primary", use_container_width=True)
 
 
 # ---------- Calculation ----------
-# Streamlit re-runs the whole script on every interaction, so we simply
-# recompute everything each run — no session_state, no stale results.
+# No caching and no session_state: results exist only for the run in which
+# Calculate was pressed, so old results can never be shown.
 results = None
 error = None
 
-try:
-    x = parse_values(x_text)
-    y = parse_values(y_text)
+if calculate:
+    try:
+        x = parse_values(x_text)
+        y = parse_values(y_text)
 
-    if len(x) != len(y):
-        raise ValueError("X and Y must contain the same number of values.")
-    if len(x) < 2:
-        raise ValueError("Please enter at least two paired observations.")
+        if len(x) != len(y):
+            raise ValueError("X and Y must contain the same number of values.")
+        if len(x) < 2:
+            raise ValueError("Please enter at least two paired observations.")
 
-    x_mean = sum(x) / len(x)
-    y_mean = sum(y) / len(y)
+        x_mean = sum(x) / len(x)
+        y_mean = sum(y) / len(y)
 
-    dx = [value - x_mean for value in x]
-    dy = [value - y_mean for value in y]
+        dx = [value - x_mean for value in x]
+        dy = [value - y_mean for value in y]
 
-    sxx = sum(d * d for d in dx)
-    syy = sum(d * d for d in dy)
-    sxy = sum(a * b for a, b in zip(dx, dy))
+        sxx = sum(d * d for d in dx)
+        syy = sum(d * d for d in dy)
+        sxy = sum(a * b for a, b in zip(dx, dy))
 
-    if sxx == 0:
-        raise ValueError("X values must not all be the same.")
-    if syy == 0:
-        raise ValueError("Y values must not all be the same.")
+        if sxx == 0:
+            raise ValueError("X values must not all be the same.")
+        if syy == 0:
+            raise ValueError("Y values must not all be the same.")
 
-    r = sxy / math.sqrt(sxx * syy)
-    r = max(-1.0, min(1.0, r))  # guard against float rounding, e.g. r = 1.0000000000000002
-    r2 = r * r
+        r = sxy / math.sqrt(sxx * syy)
+        r = max(-1.0, min(1.0, r))  # guard against float rounding, e.g. r = 1.0000000000000002
+        r2 = r * r
 
-    # Regression of Y on X: Y = a + bX
-    b_yx = sxy / sxx
-    a_yx = y_mean - b_yx * x_mean
+        # Regression of Y on X: Y = a + bX
+        b_yx = sxy / sxx
+        a_yx = y_mean - b_yx * x_mean
 
-    # Regression of X on Y: X = a + bY
-    b_xy = sxy / syy
-    a_xy = x_mean - b_xy * y_mean
+        # Regression of X on Y: X = a + bY
+        b_xy = sxy / syy
+        a_xy = x_mean - b_xy * y_mean
 
-    predicted_y = a_yx + b_yx * prediction_x
+        predicted_y = a_yx + b_yx * prediction_x
 
-    results = {
-        "x": x, "y": y, "n": len(x),
-        "x_mean": x_mean, "y_mean": y_mean,
-        "sxx": sxx, "syy": syy, "sxy": sxy,
-        "r": r, "r2": r2,
-        "a_yx": a_yx, "b_yx": b_yx,
-        "a_xy": a_xy, "b_xy": b_xy,
-        "prediction_x": prediction_x,
-        "predicted_y": predicted_y
-    }
+        results = {
+            "x": x, "y": y, "n": len(x),
+            "x_mean": x_mean, "y_mean": y_mean,
+            "sxx": sxx, "syy": syy, "sxy": sxy,
+            "r": r, "r2": r2,
+            "a_yx": a_yx, "b_yx": b_yx,
+            "a_xy": a_xy, "b_xy": b_xy,
+            "prediction_x": prediction_x,
+            "predicted_y": predicted_y
+        }
 
-except ValueError as e:
-    error = str(e)
+    except ValueError as e:
+        error = str(e)
 
 if error:
     st.error(error)
+
+if not calculate:
+    st.info("👈 Enter your X and Y values in the sidebar and press **Calculate** to see the results.")
 
 
 # ---------- Results ----------
@@ -172,5 +186,3 @@ if results:
     ax.legend()
     st.pyplot(fig)
     plt.close(fig)
-
-    st.caption("Results update automatically as you change the values.")
