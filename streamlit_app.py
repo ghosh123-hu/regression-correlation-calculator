@@ -47,22 +47,38 @@ def signed_term(value, variable):
 
 
 # ---------- Input ----------
-# Everything inside st.form is sent to the app ONLY when the Calculate button
-# is pressed. Typing in the boxes does not trigger any calculation.
+# No pre-filled values and no remembered values:
+#  - fields start empty (only grey placeholder examples are shown)
+#  - autocomplete="off" stops the browser from suggesting/remembering old entries
+#  - the Clear button wipes whatever is typed, and the results with it
+def clear_inputs():
+    st.session_state["x_text"] = ""
+    st.session_state["y_text"] = ""
+    st.session_state["prediction_x"] = None
+
+
 with st.sidebar:
     with st.form("input_form"):
         st.header("1. Enter Data")
         st.write("Enter comma-separated values. X and Y must have the same number of values.")
 
-        x_text = st.text_input("X values", value="10, 20, 30, 40, 50")
-        y_text = st.text_input("Y values", value="15, 25, 28, 38, 45")
+        x_text = st.text_input(
+            "X values", key="x_text", placeholder="e.g. 10, 20, 30, 40, 50", autocomplete="off"
+        )
+        y_text = st.text_input(
+            "Y values", key="y_text", placeholder="e.g. 15, 25, 28, 38, 45", autocomplete="off"
+        )
 
         st.divider()
 
-        st.header("2. Prediction")
-        prediction_x = st.number_input("X for prediction", value=35.0, step=1.0)
+        st.header("2. Prediction (optional)")
+        prediction_x = st.number_input(
+            "X for prediction", key="prediction_x", value=None, step=1.0, placeholder="e.g. 35"
+        )
 
         calculate = st.form_submit_button("Calculate", type="primary", use_container_width=True)
+
+    st.button("Clear all inputs", on_click=clear_inputs, use_container_width=True)
 
 
 # ---------- Calculation ----------
@@ -108,7 +124,7 @@ if calculate:
         b_xy = sxy / syy
         a_xy = x_mean - b_xy * y_mean
 
-        predicted_y = a_yx + b_yx * prediction_x
+        predicted_y = None if prediction_x is None else a_yx + b_yx * prediction_x
 
         results = {
             "x": x, "y": y, "n": len(x),
@@ -159,10 +175,11 @@ if results:
         f"{signed_term(results['b_xy'], 'Y')}"
     )
 
-    st.success(
-        f"**Prediction:** For X = {fmt(results['prediction_x'])}, "
-        f"predicted Y = {fmt(results['predicted_y'])}"
-    )
+    if results["predicted_y"] is not None:
+        st.success(
+            f"**Prediction:** For X = {fmt(results['prediction_x'])}, "
+            f"predicted Y = {fmt(results['predicted_y'])}"
+        )
 
     st.subheader("Scatter Plot + Regression Line")
 
